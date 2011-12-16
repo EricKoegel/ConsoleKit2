@@ -1,0 +1,5 @@
+[Display]
+Type=X11
+
+[X11]
+Exec=/etc/opt/SUNWut/basedir/lib/utxsun $display -auth $auth
