@@ -316,9 +316,11 @@ ck_seat_activate_session (CkSeat                *seat,
 
         ck_session_is_open (session, &is_open, NULL);
         if (!is_open) {
+                g_debug ("CkSeat: session is not open.  Request open session");
                 ret = ck_seat_request_open_session (seat, session, NULL);
                 dbus_g_method_return (context, NULL);
         } else {
+                g_debug ("CkSeat: session is open.  Activate session");
                 ret = _seat_activate_session (seat, session, context);
         }
 
@@ -465,6 +467,8 @@ emit_session_open_request (CkSeat     *seat,
         if (!ck_seat_is_managed (seat))
                 return;
 
+        g_debug ("CkSeat: Open Session Request");
+
         message = dbus_message_new_signal (seat->priv->id,
                                            "org.freedesktop.ConsoleKit.Seat",
                                            "OpenSessionRequest");
@@ -501,14 +505,18 @@ ck_seat_request_open_session (CkSeat                *seat,
         gboolean    ever_open;
         gboolean    under_request;
 
+        g_debug ("CkSeat: Request Open Session");
+
         ck_session_is_open (session, &is_open, NULL);
 
         if (is_open) {
+                g_debug ("CkSeat: Is Open");
                 return TRUE;
         }
 
         ck_session_get_under_request (session, &under_request, NULL);
         if (under_request) {
+                g_debug ("CkSeat: Is Under");
                 return TRUE;
         }
 
@@ -519,12 +527,14 @@ ck_seat_request_open_session (CkSeat                *seat,
         display_template = ck_session_get_display_template (session);
 
         if (display_template == NULL) {
+                g_debug ("CkSeat: Is Display Template");
                 return TRUE;
         }
 
         ck_session_get_session_type (session, &type, NULL);
 
         if (type == NULL) {
+                g_debug ("CkSeat: Type Is NULL");
                 g_object_unref (display_template);
                 return TRUE;
         }
@@ -534,6 +544,7 @@ ck_seat_request_open_session (CkSeat                *seat,
         display_parameters = ck_display_template_get_parameters (display_template);
 
         if (display_parameters == NULL) {
+                g_debug ("CkSeat: Display Parms Are NULL");
                 g_free (type);
                 g_object_unref (display_template);
                 g_hash_table_unref (display_variables);
@@ -550,6 +561,7 @@ ck_seat_request_open_session (CkSeat                *seat,
 
         ck_session_get_id (session, &ssid, NULL);
 
+        g_debug ("CkSeat: Emitting Open Request");
         emit_session_open_request (seat, ssid, type,
                                    ck_display_template_get_name (display_template),
                                    display_variables,
@@ -955,14 +967,19 @@ find_possible_session_to_activate (CkSeat *seat)
                 }
 
                 ck_session_get_session_type (value, &session_type, NULL);
+
+                g_debug ("CkSeat: Session Type %s", session_type);
+
                 if (IS_STR_SET (session_type) &&
                     g_str_equal (session_type, "LoginWindow")) {
                         login_session = value;
+                        g_debug ("CkSeat: Setting login_session");
                         g_free (session_type);
                 }
         }
 
         if (login_session != NULL) {
+                g_debug ("CkSeat: Login Session is not NULL");
                 ck_session_set_ever_open (login_session, FALSE, NULL);
                 ck_seat_request_open_session (seat, login_session, NULL);
         }
@@ -995,8 +1012,6 @@ static void
 maybe_update_active_session (CkSeat *seat)
 {
         guint num;
-
-        g_debug ("CkSeat: Check to see if we should update active session");
 
         switch (seat->priv->kind){
         case CK_SEAT_KIND_STATIC:
@@ -1214,10 +1229,12 @@ ck_seat_add_session (CkSeat         *seat,
         g_signal_emit (seat, signals [SESSION_ADDED_FULL], 0, session);
         g_signal_emit (seat, signals [SESSION_ADDED], 0, ssid);
 
-        maybe_update_active_session (seat);
-
         if (ck_seat_is_managed (seat)) {
+                g_debug ("CkSeat: Seat is managed.  Request open session");
                 ck_seat_request_open_session (seat, session, NULL);
+        } else {
+                g_debug ("CkSeat: Seat is not managed.  Maybe update active session");
+                maybe_update_active_session (seat);
         }
 
         g_free (ssid);
@@ -1640,7 +1657,6 @@ ck_seat_class_init (CkSeatClass *klass)
                                                   NULL,
                                                   g_cclosure_marshal_VOID__VOID,
                                                   G_TYPE_NONE, 0);
-/* HERE */
 
         g_object_class_install_property (object_class,
                                          PROP_ID,
