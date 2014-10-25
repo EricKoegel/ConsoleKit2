@@ -100,6 +100,8 @@ enum {
 
 static guint signals [LAST_SIGNAL] = { 0, };
 
+static gboolean ck_seat_shutdown = FALSE;
+
 static void     ck_seat_class_init  (CkSeatClass *klass);
 static void     ck_seat_init        (CkSeat      *seat);
 static void     ck_seat_finalize    (GObject     *object);
@@ -118,6 +120,13 @@ ck_seat_error_quark (void)
 }
 
 #define ENUM_ENTRY(NAME, DESC) { NAME, "" #NAME "", DESC }
+
+void
+ck_seat_set_shutdown (void)
+{
+   g_debug ("CkSeat: setting shutdown, will stop restarting displays");
+   ck_seat_shutdown = TRUE;
+}
 
 GType
 ck_seat_kind_get_type (void)
@@ -1154,7 +1163,7 @@ ck_seat_remove_session (CkSeat         *seat,
         }
 
         /* Otherwise, look for an active session */
-        if (found_login == FALSE) {
+        if (!ck_seat_shutdown && found_login == FALSE) {
                 g_debug ("Login not found.  Maybe update active session");
                 maybe_update_active_session (seat);
         }

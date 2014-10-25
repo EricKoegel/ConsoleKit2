@@ -1255,6 +1255,7 @@ do_system_action (CkManager             *manager,
 
                 g_error_free (error);
         } else {
+                ck_seat_set_shutdown ();
                 dbus_g_method_return (context);
         }
 }
@@ -1318,6 +1319,9 @@ do_restart (CkManager             *manager,
         manager->priv->system_action_idle_id = g_timeout_add (data->manager->priv->system_action_idle_delay,
                                                               (GSourceFunc)system_action_idle_cb,
                                                               data);
+
+        /* We're restarting the system so stop restarting displays */
+        ck_seat_set_shutdown ();
 }
 
 /*
@@ -1412,6 +1416,9 @@ do_stop (CkManager             *manager,
         manager->priv->system_action_idle_id = g_timeout_add (data->manager->priv->system_action_idle_delay,
                                                               (GSourceFunc)system_action_idle_cb,
                                                               data);
+
+        /* We're shutting down so stop restarting displays */
+        ck_seat_set_shutdown ();
 }
 
 gboolean

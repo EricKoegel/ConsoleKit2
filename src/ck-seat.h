@@ -178,6 +178,8 @@ gboolean            ck_seat_no_respawn            (CkSeat                *seat,
                                                    CkSession             *session,
                                                    GError               **error);
 
+void                ck_seat_set_shutdown          (void);
+
 G_END_DECLS
 
 #endif /* __CK_SEAT_H */
