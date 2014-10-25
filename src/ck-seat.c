@@ -961,9 +961,31 @@ find_possible_session_to_activate (CkSeat *seat)
                 ck_session_is_open (value, &is_open, NULL);
 
                 if (is_open) {
+                        GError  *vt_error = NULL;
+                        char    *device;
+                        guint    num;
+                        gboolean ret;
+
                         login_session = NULL;
-                        change_active_session (seat, value);
-                        break;
+                        g_debug ("Found open session.");
+
+                        switch (seat->priv->kind) {
+                           case CK_SEAT_KIND_STATIC:
+                                device = NULL;
+                                ck_session_get_x11_display_device (value, &device, NULL);
+
+                                if (device != NULL) {
+                                   ret = ck_get_console_num_from_device (device, &num);
+                                   if (ret) {
+                                           g_debug ("Activating VT %d", num);
+                                           ck_vt_monitor_set_active (seat->priv->vt_monitor, num, &vt_error);
+                                   }
+                                }
+                                break;
+                            case CK_SEAT_KIND_DYNAMIC:
+                                change_active_session (seat, value);
+                                break;
+                        }
                 }
 
                 ck_session_get_session_type (value, &session_type, NULL);
@@ -1050,6 +1072,11 @@ ck_seat_remove_session (CkSeat         *seat,
         CkSession *orig_session;
         gboolean   res;
         gboolean   ret;
+        GHashTableIter iter;
+        gpointer       key, value;
+        gboolean       found_login = FALSE;
+        gboolean       is_open;
+        char          *session_type = NULL;
 
         g_return_val_if_fail (CK_IS_SEAT (seat), FALSE);
 
@@ -1089,7 +1116,48 @@ ck_seat_remove_session (CkSeat         *seat,
         g_signal_emit (seat, signals [SESSION_REMOVED], 0, ssid);
 
         /* try to change the active session */
-        maybe_update_active_session (seat);
+
+        /* On session exit, first try to switch to any active login sessions */
+        g_hash_table_iter_init (&iter, seat->priv->sessions);
+        if (seat->priv->kind == CK_SEAT_KIND_STATIC) {
+                while (seat->priv->kind == CK_SEAT_KIND_STATIC && g_hash_table_iter_next (&iter, &key, &value)) {
+                        CkSession *login_session = value;
+                        ck_session_get_session_type (login_session, &session_type, NULL);
+                        ck_session_is_open (login_session, &is_open, NULL);
+
+                        if (is_open && IS_STR_SET (session_type) &&
+                            g_str_equal (session_type, "LoginWindow")) {
+                                GError    *vt_error = NULL;
+                                char      *device;
+                                guint      num;
+
+                                g_debug ("Found a LoginWindow");
+                                device = NULL;
+                                ck_session_get_x11_display_device (login_session, &device, NULL);
+
+                                if (device != NULL) {
+                                        ret = ck_get_console_num_from_device (device, &num);
+                                        if (ret) {
+                                                g_debug ("Setting active to %d", num);
+                                                found_login = TRUE;
+                                                ck_vt_monitor_set_active (seat->priv->vt_monitor, num, &vt_error);
+                                        } else {
+                                               g_debug ("The LoginWindow device has no console number, not using.");
+                                        }
+                                } else {
+                                       g_debug ("The LoginWindow display has no x11 display device, not using.");
+                                }
+                        }
+                        if (session_type != NULL)
+                                g_free (session_type);
+                }
+        }
+
+        /* Otherwise, look for an active session */
+        if (found_login == FALSE) {
+                g_debug ("Login not found.  Maybe update active session");
+                maybe_update_active_session (seat);
+        }
 
         if (orig_session != NULL) {
                 g_object_unref (orig_session);
@@ -1356,8 +1424,6 @@ active_vt_changed (CkVtMonitor    *vt_monitor,
                    CkSeat         *seat)
 {
         g_debug ("Active vt changed: %u", num);
-
-        update_active_vt (seat, num);
 }
 
 gboolean
