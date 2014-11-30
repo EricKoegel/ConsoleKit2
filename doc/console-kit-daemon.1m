@@ -126,8 +126,9 @@ graphical VT displays on the console)\&.
 .in -4
 .PP
 The following environment variables are set when \fBconsole-kit-daemon\fR
-runs the \fBrun-seat\&.d\fR scripts\&.  These values correspond to those
-values returned by the \fBck-list-session\fR(1) utility\&.
+runs the \fBrun-session\&.d\fR and \fBrun-seat\&.d\fR
+scripts\&.  These values correspond to those values returned by the
+\fBck-list-session\fR(1) utility\&.
 .sp
 .ne 2
 .mk
@@ -317,6 +318,53 @@ file named
 .sp
 .sp 1
 .in -4
+.SS "ConsoleKit Display Configuration"
+.PP
+ConsoleKit display configuration files are located in the
+/etc/ConsoleKit/displays\&.d directory\&.  Each session
+configuration file ends with the \fB\&.display\fR suffix\&.
+Additional seat configuration files may be added\&.  These files are in standard
+INI format\&.
+.PP
+The settings below are in
+"group/key" format, so to specify the "X11/Display"
+value, the file shoulld contain these lines:
+.PP
+.nf
+[X11]
+[\&.\&.\&.]
+Exec=/usr/X11/bin/Xorg $display -br -verbose -auth $auth -nolisten tcp $vt
+.fi
+.PP
+The following keys are supported for configuring ConsoleKit displays:
+.sp
+.ne 2
+.mk
+\fBDisplay/Type\fR
+.sp .6
+.in +4
+The type of the display\&.  Currently only the value "X11" is
+supported\&.  This indicates that the display will be managed by an Xserver
+that sends a SIGUSR1 signal to its parent pid when it is ready\&.  This is
+standard for all Xservers, such as the
+\fBXorg\fR(1) Xserver\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fBX11/Exec\fR
+.sp .6
+.in +4
+The command to run to launch the session\&.  This command supports variables
+that start with the "$" character, like "$display"\&.
+The values to use for these variables can either be specified in the
+ConsoleKit session configuration file in the "[Local]" section, or
+via the \fBck-seat-tool\fR(1) application\&.
+.sp
+.sp 1
+.in -4
 .SS "ConsoleKit Session Configuration"
 .PP
 ConsoleKit session configuration files are located in the
@@ -397,6 +445,24 @@ the command to be replaced with the value "0"\&.
 .sp
 .sp 1
 .in -4
+.SS "ConsoleKit Session Script Interfaces"
+.PP
+The following interfaces are provided so that system administrators can
+configure that certain actions happen when ConsoleKit responds to certain
+events\&.
+.PP
+When a ConsoleKit session is started or removed, then \fBconsole-kit-daemon\fR
+will first run any scripts found in the
+\fB/etc/ConsoleKit/run-session\&.d\fR directory and then run any
+scripts in the
+\fB/usr/lib/ConsoleKit/run-session\&.d\fR directory\&.
+.PP
+When certain seat events, such as "seat_added",
+"seat_removed" or "seat_active_session_changed" occur,
+then \fBconsole-kit-daemon\fR will first run any script in the
+\fB/etc/ConsoleKit/run-seat\&.d\fR directory and  then run any
+scripts in the
+\fB/usr/lib/ConsoleKit/run-seat\&.d\fR directory\&.
 .SS "ConsoleKit System Restart and Stop"
 .PP
 \fBconsole-kit-daemon\fR provides D-Bus interfaces that will restart or stop
@@ -448,6 +514,160 @@ display=:1
 vt=/dev/vt/8
 .fi
 .PP
+\fBExample 3: To configure ConsoleKit to start multiple seat\fR
+.PP
+To start two seats: a local session on DISPLAY ":0" using
+"vt7" and another seat using a VNC session on DISPLAY ":64",
+add a file \fB/etc/ConsoleKit/seats\&.d/01-vnc\&.seat\fR as
+follows:
+.PP
+.nf
+[Seat Entry]
+Version=1\&.0
+Name=VNC seat
+Description=start one VNC display on :64
+Hidden=false
+Devices=
+Sessions=LocalVNC;
+.fi
+.PP
+Add the
+\fB/etc/ConsoleKit/sessions\&.d/LocalVNC\&.session\fR file as
+follows:
+.PP
+.nf
+[Session Entry]
+Name=LocalVNC
+Type=LoginWindow
+Description=Connect to local VNC server running on same machine
+DisplayTemplate=LocalVNC
+
+[LocalVNC]
+display=:64
+.fi
+.PP
+Finally, add the
+\fB/etc/ConsoleKit/displays\&.d/LocalVNC\&.display\fR file as
+follows:
+.PP
+.nf
+[Display]
+Type=X11
+
+[X11]
+Exec=/usr/X11/bin/Xvnc $display -auth $auth -query localhost
+.fi
+.SH "FILES"
+.PP
+The following files are used by this application:
+.sp
+.ne 2
+.mk
+\fB\fB/usr/sbin/console-kit-daemon\fR\fR
+.sp .6
+.in +4
+Executable for the ConsoleKit daemon\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/usr/lib/ConsoleKit/run-seat\&.d\fR\fR
+.sp .6
+.in +4
+Any scripts in this directory are run when a ConsoleKit seat event happens\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/usr/lib/ConsoleKit/run-session\&.d\fR\fR
+.sp .6
+.in +4
+Any scripts in this directory are run when a ConsoleKit session event happens\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/usr/lib/ConsoleKit/scripts/ck-system-restart\fR\fR
+.sp .6
+.in +4
+Script to run when ConsoleKit receives a D-Bus request to restart the system\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/usr/lib/ConsoleKit/scripts/ck-system-stop\fR\fR
+.sp .6
+.in +4
+Script to run when ConsoleKit receives a D-Bus request to stop the system\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/etc/ConsoleKit/seats\&.d\fR\fR
+.sp .6
+.in +4
+ConsoleKit seat configuration files\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/etc/ConsoleKit/session\&.d\fR\fR
+.sp .6
+.in +4
+ConsoleKit session configuration files\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/etc/ConsoleKit/run-seat\&.d\fR\fR
+.sp .6
+.in +4
+Any scripts in this directory are run when a ConsoleKit seat event happens\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/etc/ConsoleKit/run-session\&.d\fR\fR
+.sp .6
+.in +4
+Any scripts in this directory are run when a ConsoleKit seat event happens\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/var/run/ConsoleKit/database\fR\fR
+.sp .6
+.in +4
+ConsoleKit database\&.
+.sp
+.sp 1
+.in -4
+.sp
+.ne 2
+.mk
+\fB\fB/var/log/ConsoleKit/history\fR\fR
+.sp .6
+.in +4
+ConsoleKit history database\&.
+.sp
 .SH "SEE ALSO"
 .PP
 More information can be found at:
@@ -457,6 +677,7 @@ More information can be found at:
 \fBck-history\fR(1),
 \fBck-launch-session\fR(1),
 \fBck-list-sessions\fR(1),
+\fBck-seat-tool\fR(1m),
 \fBsvcadm\fR(1m),
 \fBenviron\fR(5),
 \fBsmf\fR(5),
