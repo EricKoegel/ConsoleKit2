@@ -211,7 +211,6 @@ ck_display_template_load (CkDisplayTemplate *display)
         const char *name;
         char       *group;
         char       *filename;
-        gboolean    hidden;
         char       *type;
         gboolean    res;
         GError     *error;
@@ -246,8 +245,6 @@ ck_display_template_load (CkDisplayTemplate *display)
                 g_key_file_free (key_file);
                 return FALSE;
         }
-
-        hidden = g_key_file_get_boolean (key_file, group, "Hidden", NULL);
 
         type = g_key_file_get_string (key_file, group, "Type", NULL);
 

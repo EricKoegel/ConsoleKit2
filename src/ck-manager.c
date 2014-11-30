@@ -2682,6 +2682,10 @@ open_session_for_sender (CkManager             *manager,
         if (IS_STR_SET (ssid)) {
                 session = g_hash_table_lookup (manager->priv->sessions, ssid);
 
+                if (session == NULL) {
+                        g_debug ("CkManager: unable to lookup session");
+                }
+
                 /* FIXME: Need to verify that the session belongs to a seat
                  * managed by the sender
                  */

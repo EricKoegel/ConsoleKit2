@@ -53,13 +53,7 @@ typedef struct CkSessionOutput {
 } CkSessionOutput;
 
 static gboolean do_all = FALSE;
-static gboolean do_version = FALSE;
 static char *do_format = NULL;
-static GOptionEntry entries [] = {
-        { "all", 'a', 0, G_OPTION_ARG_NONE, &do_all, N_("List all sessions. If not given, only list open sessions"), NULL },
-        { "format", 'f', 0, G_OPTION_ARG_STRING, &do_format, N_("Prints information according to the given format"), NULL },
-        { NULL }
-};
 
 static gboolean
 get_uint (DBusGProxy *proxy,
@@ -423,6 +417,8 @@ main (int    argc,
         GError         *error = NULL;
         static gboolean do_version = FALSE;
         static GOptionEntry entries [] = {
+                { "all", 'a', 0, G_OPTION_ARG_NONE, &do_all, N_("List all sessions. If not given, only list open sessions"), NULL },
+                { "format", 'f', 0, G_OPTION_ARG_STRING, &do_format, N_("Prints information according to the given format"), NULL },
                 { "version", 'V', 0, G_OPTION_ARG_NONE, &do_version, N_("Version of this application"), NULL },
                 { NULL }
         };

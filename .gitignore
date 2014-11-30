@@ -53,3 +53,8 @@ autotools/*
 cov-int/*
 data/consolekit.logrotate
 data/90-consolekit
+data/displays.d/Headless.display
+data/displays.d/Local.display
+data/displays.d/LocalVNC.display
+data/displays.d/RemoteMachine.display
+tools/ck-seat-tool

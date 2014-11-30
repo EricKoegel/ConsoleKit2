@@ -297,7 +297,7 @@ find_seat_id_from_session_id (DBusGConnection *connection,
         GError     *error;
         GPtrArray  *seats;
         int         i;
-        char       *sid;
+        char       *sid = NULL;
         gboolean    res;
 
         error = NULL;
@@ -335,7 +335,7 @@ delete_session (DBusGConnection *connection)
         DBusGProxy *proxy;
         char       *ssid;
         char       *sid;
-        gboolean    is_last_session;
+        gboolean    is_last_session = FALSE;
 
         if (!g_str_has_prefix (session_id, CK_PATH_PREFIX)) {
                 ssid = g_strdup_printf ("%s%s", CK_PATH_PREFIX, session_id);
@@ -384,7 +384,9 @@ main (int argc, char *argv[])
         GError          *error = NULL;
         gboolean         res;
 
+#if !GLIB_CHECK_VERSION(2, 36, 0)
         g_type_init ();
+#endif
 
         /* Option parsing */
         ctx = g_option_context_new (_("- Manage dynamic sessions"));

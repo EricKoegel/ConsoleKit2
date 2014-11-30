@@ -74,7 +74,7 @@ struct CkSessionPrivate
         gboolean         is_open;
         gboolean         ever_open;
         gboolean         under_request;
-        GMutex          *mutex_under_request;
+        GMutex           mutex_under_request;
 
         GTimeVal         creation_time;
 
@@ -517,9 +517,9 @@ static gboolean
 timeout_for_under_request (gpointer data)
 {
         CkSession *session = CK_SESSION (data);
-        g_mutex_lock (session->priv->mutex_under_request);
+        g_mutex_lock (&session->priv->mutex_under_request);
         session->priv->under_request = FALSE;
-        g_mutex_unlock (session->priv->mutex_under_request);
+        g_mutex_unlock (&session->priv->mutex_under_request);
 
         g_debug ("CkSession: timeout for under request of session %s", session->priv->id);
         return FALSE;
@@ -532,7 +532,7 @@ ck_session_set_under_request (CkSession    *session,
 {
         g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
 
-        g_mutex_lock (session->priv->mutex_under_request);
+        g_mutex_lock (&session->priv->mutex_under_request);
         if (!under_request) {
                 session->priv->under_request = FALSE;
         } else {
@@ -541,7 +541,7 @@ ck_session_set_under_request (CkSession    *session,
                         g_timeout_add_seconds (1, timeout_for_under_request, session);
                 }
         }
-        g_mutex_unlock (session->priv->mutex_under_request);
+        g_mutex_unlock (&session->priv->mutex_under_request);
 
         return TRUE;
 }
@@ -787,9 +787,9 @@ ck_session_get_under_request (CkSession      *session,
         g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
 
         if (under_request != NULL) {
-                g_mutex_lock (session->priv->mutex_under_request);
+                g_mutex_lock (&session->priv->mutex_under_request);
                 *under_request = session->priv->under_request;
-                g_mutex_unlock (session->priv->mutex_under_request);
+                g_mutex_unlock (&session->priv->mutex_under_request);
         }
 
         return TRUE;
@@ -1427,9 +1427,6 @@ ck_session_init (CkSession *session)
 
         /* FIXME: should we have a property for this? */
         g_get_current_time (&session->priv->creation_time);
-
-        if (!session->priv->mutex_under_request)
-                session->priv->mutex_under_request = g_mutex_new ();
 }
 
 static void
