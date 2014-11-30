@@ -49,7 +49,8 @@ typedef struct
         GObjectClass   parent_class;
 
         void          (* seat_added)               (CkManager  *manager,
-                                                    const char *sid);
+                                                    const char *sid,
+                                                    const char *type);
         void          (* seat_removed)             (CkManager  *manager,
                                                     const char *sid);
         void          (* system_idle_hint_changed) (CkManager  *manager,
@@ -139,6 +140,9 @@ gboolean            ck_manager_get_sessions                   (CkManager        
 gboolean            ck_manager_get_seats                      (CkManager             *manager,
                                                                GPtrArray            **seats,
                                                                GError               **error);
+gboolean            ck_manager_get_unmanaged_seats            (CkManager             *manager,
+                                                               GPtrArray            **seats,
+                                                               GError               **error);
 gboolean            ck_manager_close_session                  (CkManager             *manager,
                                                                const char            *cookie,
                                                                DBusGMethodInvocation *context);
@@ -169,6 +173,31 @@ gboolean            ck_manager_get_system_idle_since_hint     (CkManager        
 /* privileged methods - should be protected by D-Bus policy */
 gboolean            ck_manager_open_session_with_parameters   (CkManager             *manager,
                                                                const GPtrArray       *parameters,
+                                                               DBusGMethodInvocation *context);
+
+gboolean            ck_manager_add_seat                       (CkManager             *manager,
+                                                               const char            *type,
+                                                               char                 **sid,
+                                                               GError               **error);
+gboolean            ck_manager_add_seat_by_id                 (CkManager             *manager,
+                                                               const char            *type,
+                                                               const char            *sid,
+                                                               GError               **error);
+gboolean            ck_manager_remove_seat                    (CkManager             *manager,
+                                                               const char            *sid,
+                                                               DBusGMethodInvocation *context);
+
+gboolean            ck_manager_add_session                    (CkManager             *manager,
+                                                               const char            *sid,
+                                                               const char            *type,
+                                                               const char            *display_type,
+                                                               GHashTable            *parameters,
+                                                               DBusGMethodInvocation *context);
+gboolean            ck_manager_remove_session                  (CkManager             *manager,
+                                                                const char            *ssid,
+                                                                DBusGMethodInvocation *context);
+gboolean            ck_manager_will_not_respawn               (CkManager             *manager,
+                                                               const char            *cookie,
                                                                DBusGMethodInvocation *context);
 
 G_END_DECLS

@@ -1,0 +1,5 @@
+[Display]
+Type=X11
+
+[X11]
+Exec=@X11_DIR@/Xorg $display -br -verbose -auth $auth -nolisten tcp $vt

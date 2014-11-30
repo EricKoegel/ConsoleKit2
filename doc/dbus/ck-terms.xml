@@ -64,4 +64,11 @@ True, hardware, multi-seat capabilities will be added in a later release.
     </para>
   </sect1>
 
+  <sect1>
+    <title>Seat manager</title>
+    <para>
+The seat manager is the process responsible for starting and stopping sessions on a seat.
+    </para>
+  </sect1>
+
 </chapter>

@@ -47,6 +47,18 @@ typedef struct
 {
         GObjectClass   parent_class;
 
+        void          (* remove_request)         (CkSeat      *seat);
+        void          (* open_session_request)   (CkSeat      *seat,
+                                                  const char  *ssid,
+                                                  const char  *session_type,
+                                                  const char  *display_template_name,
+                                                  GHashTable  *display_variables,
+                                                  const char  *display_type,
+                                                  GHashTable  *parameters);
+        void          (* close_session_request)  (CkSeat      *seat,
+                                                  const char  *ssid);
+        void          (* no_respawn)             (CkSeat      *seat,
+                                                  const char  *ssid);
         void          (* active_session_changed) (CkSeat      *seat,
                                                   const char  *ssid);
         void          (* session_added)          (CkSeat      *seat,
@@ -57,6 +69,11 @@ typedef struct
                                                   GValueArray *device);
         void          (* device_removed)         (CkSeat      *seat,
                                                   GValueArray *device);
+        void          (* session_to_add)         (CkSeat      *seat,
+                                                  gboolean     is_dynamic,
+                                                  const char  *command);
+        void          (* session_to_remove)      (CkSeat      *seat,
+                                                  int          display_number);
 } CkSeatClass;
 
 typedef enum
@@ -84,12 +101,14 @@ typedef enum
 GQuark              ck_seat_error_quark         (void);
 GType               ck_seat_get_type            (void);
 CkSeat            * ck_seat_new                 (const char            *sid,
-                                                 CkSeatKind             kind);
-CkSeat            * ck_seat_new_from_file       (const char            *sid,
-                                                 const char            *path);
-CkSeat            * ck_seat_new_with_devices    (const char            *sid,
                                                  CkSeatKind             kind,
-                                                 GPtrArray             *devices);
+                                                 const char            *type);
+CkSeat            * ck_seat_new_from_file       (char                 **sid,
+                                                 const char            *path);
+CkSeat            * ck_seat_new_with_devices_and_sessions    (const char            *sid,
+                                                              CkSeatKind             kind,
+                                                              GPtrArray             *devices,
+                                                              GPtrArray             *sessions);
 
 gboolean            ck_seat_register            (CkSeat                *seat);
 
@@ -104,18 +123,31 @@ void                ck_seat_dump                (CkSeat                *seat,
 gboolean            ck_seat_get_kind            (CkSeat                *seat,
                                                  CkSeatKind            *kind,
                                                  GError               **error);
+gboolean            ck_seat_get_type_string     (CkSeat                *seat,
+                                                 char                 **type,
+                                                 GError               **error);
 gboolean            ck_seat_add_session         (CkSeat                *seat,
                                                  CkSession             *session,
                                                  GError               **error);
 gboolean            ck_seat_remove_session      (CkSeat                *seat,
                                                  CkSession             *session,
                                                  GError               **error);
+gboolean            ck_seat_request_open_session (CkSeat                *seat,
+                                                  CkSession             *session,
+                                                  GError               **error);
+gboolean            ck_seat_request_close_session (CkSeat                *seat,
+                                                   CkSession             *session,
+                                                   GError               **error);
 gboolean            ck_seat_add_device          (CkSeat                *seat,
                                                  GValueArray           *device,
                                                  GError               **error);
 gboolean            ck_seat_remove_device       (CkSeat                *seat,
                                                  GValueArray           *device,
                                                  GError               **error);
+gboolean            ck_seat_is_managed          (CkSeat                *seat);
+CkSession          *ck_seat_get_session         (CkSeat                *seat,
+                                                 const char            *ssid);
+void                ck_seat_request_removal     (CkSeat                *seat);
 
 /* exported methods */
 gboolean            ck_seat_get_id                (CkSeat                *seat,
@@ -137,6 +169,14 @@ gboolean            ck_seat_can_activate_sessions (CkSeat                *seat,
 gboolean            ck_seat_activate_session      (CkSeat                *seat,
                                                    const char            *ssid,
                                                    DBusGMethodInvocation *context);
+gboolean            ck_seat_manage                (CkSeat                *seat,
+                                                   DBusGMethodInvocation *context);
+gboolean            ck_seat_unmanage              (CkSeat                *seat,
+                                                   DBusGMethodInvocation *context);
+
+gboolean            ck_seat_no_respawn            (CkSeat                *seat,
+                                                   CkSession             *session,
+                                                   GError               **error);
 
 G_END_DECLS
 

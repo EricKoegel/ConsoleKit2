@@ -1,5 +1,26 @@
 [Seat Entry]
 Version=1.0
 Name=Primary seat
+# Specified Seat ID, if this value is NULL, ConsoleKit will decide one.
+# The ID only contain the ASICC characters "[A-Z][a-z][0-9]_"
+ID=StaticSeat1
+Description=start one static local display at :0
+
+# Indicate whether to create this seat or not. If it is set true, then CK will
+# not create this seat. Default value is false.
 Hidden=false
+
+# Indicate input/output devices including keyboard-pointer-video
+# card-monitor-sound-usb devices,
+# This key will not implemented now, it might need be divided into
+# several keys in the future:
+# Pointer=
+# Monitor=
+# VideoCard=
+# Monitor=
+# UsbHub=
 Devices=
+
+# List of sessions to start on the seat, separated by ';'
+# Each session is defined in sessions.d/
+Sessions=Local;

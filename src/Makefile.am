@@ -123,6 +123,8 @@ console_kit_daemon_SOURCES =	\
 	ck-file-monitor.h	\
 	ck-job.h		\
 	ck-job.c		\
+	ck-display-template.h	\
+	ck-display-template.c	\
 	ck-seat.h		\
 	ck-seat.c		\
 	ck-session-leader.h	\
@@ -141,6 +143,13 @@ console_kit_daemon_SOURCES =	\
 	ck-inhibit-manager.h	\
 	$(BUILT_SOURCES)	\
 	$(NULL)
+
+if USE_SELF_STRVERSCMP
+console_kit_daemon_SOURCES +=	\
+	strverscmp.c		\
+	strverscmp.h		\
+	$(NULL)
+endif
 
 if ENABLE_INOTIFY
 FILE_MONITOR_BACKEND = ck-file-monitor-inotify.c

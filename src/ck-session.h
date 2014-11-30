@@ -25,6 +25,8 @@
 #include <glib-object.h>
 #include <dbus/dbus-glib.h>
 
+#include "ck-display-template.h"
+
 G_BEGIN_DECLS
 
 #define CK_TYPE_SESSION         (ck_session_get_type ())
@@ -68,10 +70,15 @@ typedef enum
 
 GQuark              ck_session_error_quark            (void);
 GType               ck_session_get_type               (void);
+CkSession         * ck_session_new_from_file          (const char            *ssid,
+                                                       const char            *path);
 CkSession         * ck_session_new                    (const char            *ssid,
-                                                       const char            *cookie);
+                                                       const char            *type,
+                                                       const char            *display_type_string,
+                                                       GHashTable            *display_variables);
 CkSession         * ck_session_new_with_parameters    (const char            *ssid,
-                                                       const char            *cookie,
+                                                       const GPtrArray       *parameters);
+void                ck_session_set_parameters         (CkSession             *session,
                                                        const GPtrArray       *parameters);
 
 void                ck_session_dump                   (CkSession             *session,
@@ -85,6 +92,15 @@ gboolean            ck_session_set_active             (CkSession             *se
                                                        GError               **error);
 gboolean            ck_session_set_is_local           (CkSession             *session,
                                                        gboolean               is_local,
+                                                       GError               **error);
+gboolean            ck_session_set_is_open            (CkSession             *session,
+                                                       gboolean               is_open,
+                                                       GError               **error);
+gboolean            ck_session_set_ever_open          (CkSession             *session,
+                                                       gboolean               ever_open,
+                                                       GError               **error);
+gboolean            ck_session_set_under_request      (CkSession             *session,
+                                                       gboolean               under_request,
                                                        GError               **error);
 gboolean            ck_session_set_id                 (CkSession             *session,
                                                        const char            *ssid,
@@ -116,6 +132,11 @@ gboolean            ck_session_set_remote_host_name   (CkSession             *se
 gboolean            ck_session_set_session_type       (CkSession             *session,
                                                        const char            *type,
                                                        GError               **error);
+gboolean            ck_session_set_display_type       (CkSession             *session,
+                                                       const char            *type,
+                                                       GError               **error);
+GHashTable         *ck_session_get_display_variables  (CkSession             *session);
+CkDisplayTemplate  *ck_session_get_display_template   (CkSession             *session);
 
 /* Exported methods */
 
@@ -131,6 +152,15 @@ gboolean            ck_session_is_active              (CkSession             *se
                                                        GError               **error);
 gboolean            ck_session_is_local               (CkSession             *session,
                                                        gboolean              *local,
+                                                       GError               **error);
+gboolean            ck_session_is_open                (CkSession             *session,
+                                                       gboolean              *open,
+                                                       GError               **error);
+gboolean            ck_session_get_ever_open          (CkSession             *session,
+                                                       gboolean              *open,
+                                                       GError               **error);
+gboolean            ck_session_get_under_request      (CkSession             *session,
+                                                       gboolean              *under_request,
                                                        GError               **error);
 gboolean            ck_session_get_unix_user          (CkSession             *session,
                                                        guint                 *uid,
@@ -150,11 +180,17 @@ gboolean            ck_session_get_login_session_id   (CkSession             *se
 gboolean            ck_session_get_session_type       (CkSession             *session,
                                                        char                 **type,
                                                        GError               **error);
+gboolean            ck_session_get_display_type       (CkSession             *session,
+                                                       char                 **type,
+                                                       GError               **error);
 gboolean            ck_session_get_remote_host_name   (CkSession             *session,
                                                        char                 **host_name,
                                                        GError               **error);
 gboolean            ck_session_get_creation_time      (CkSession             *session,
                                                        char                 **iso8601_datetime,
+                                                       GError               **error);
+gboolean            ck_session_get_remove_on_close    (CkSession             *session,
+                                                       gboolean              *remove_on_close,
                                                        GError               **error);
 /*deprecated*/
 gboolean            ck_session_get_user               (CkSession             *session,
@@ -170,6 +206,12 @@ gboolean            ck_session_get_idle_since_hint    (CkSession             *se
                                                        GError               **error);
 gboolean            ck_session_set_idle_hint          (CkSession             *session,
                                                        gboolean               idle_hint,
+                                                       DBusGMethodInvocation *context);
+gboolean            session_set_remove_on_close       (CkSession             *session,
+                                                       gboolean               remove_on_close,
+                                                       GError               **error);
+gboolean            ck_session_set_remove_on_close    (CkSession             *session,
+                                                       gboolean               remove_on_close,
                                                        DBusGMethodInvocation *context);
 
 /* Privileged actions */

@@ -1,0 +1,8 @@
+[Session Entry]
+Name=Local
+Type=LoginWindow
+Description=Local Login Screen
+DisplayTemplate=Local
+
+[Local]
+display=:0

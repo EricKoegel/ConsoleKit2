@@ -414,6 +414,23 @@
       </doc:doc>
     </method>
 
+    <method name="GetUnmanagedSeats">
+      <arg name="seats" direction="out" type="ao">
+        <doc:doc>
+          <doc:summary>an array of unmanaged Seat IDs</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This gets a list of the unmanaged <doc:ref type="interface" to="Seat">Seats</doc:ref>
+          that are statically configured under /etc/ConsoleKit/seats.d</doc:para>
+          <doc:para>Each Seat ID is an D-Bus object path for the object that implements the
+          <doc:ref type="interface" to="Seat">Seat</doc:ref> interface.</doc:para>
+        </doc:description>
+        <doc:seealso><doc:ref type="interface" to="Seat">org.freedesktop.ConsoleKit.Seat</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
+
     <method name="GetSessions">
       <arg name="sessions" direction="out" type="ao">
         <doc:doc>
@@ -450,6 +467,22 @@
         </doc:description>
       </doc:doc>
     </method>
+
+    <method name="WillNotRespawn">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="ssid" type="o" direction="in">
+        <doc:doc>
+          <doc:summary>The session id of the session</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This may be used to set Remove On Close for a Session.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
     <method name="GetSessionForUnixProcess">
       <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
       <arg name="pid" direction="in" type="u">
@@ -564,10 +597,113 @@
       </doc:doc>
     </method>
 
+    <method name="AddSeat">
+      <arg name="type" type="s" direction="in">
+        <doc:doc>
+          <doc:summary>The type of seat to add</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="sid" type="o" direction="out">
+        <doc:doc>
+          <doc:summary>The Seat ID of the added seat</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method is to create a new seat
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+    <method name="AddSeatById">
+      <arg name="type" type="s" direction="in">
+        <doc:doc>
+          <doc:summary>The type of seat to add</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="sid" type="o" direction="in">
+        <doc:doc>
+          <doc:summary>The Seat ID of to be added seat</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method is to create a new seat by specify given sid
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+    <method name="RemoveSeat">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="sid" type="o" direction="in">
+        <doc:doc>
+          <doc:summary>The Seat ID of the seat to remove</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method is to remove a seat
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+    <method name="AddSession">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="sid" type="o">
+        <doc:doc>
+          <doc:summary>The seat to add the session to</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="type" type="s">
+        <doc:doc>
+          <doc:summary>The type of session to run (e.g. "LoginWindow", "Chooser", etc)</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="display_type" type="s">
+        <doc:doc>
+          <doc:summary>The name of the display type to use (defined in displays.d)</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="variables" type="a{ss}">
+        <doc:doc>
+          <doc:summary>Session type specific parameters</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="ssid" direction="out" type="o">
+        <doc:doc>
+          <doc:summary>Session ID</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Request a new session gets added to seat.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+    <method name="RemoveSession">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="ssid" type="o" direction="in">
+        <doc:doc>
+          <doc:summary>The session id of the session to remove</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This method is to remove a session from a seat
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
     <signal name="SeatAdded">
       <arg name="sid" type="o">
         <doc:doc>
           <doc:summary>The Seat ID for the added seat</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="type" type="s">
+        <doc:doc>
+          <doc:summary>The type of seat added.</doc:summary>
         </doc:doc>
       </arg>
       <doc:doc>

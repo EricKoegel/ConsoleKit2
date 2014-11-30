@@ -1,0 +1,8 @@
+[Session Entry]
+Name=Headless
+Type=LoginWindow
+Description=Login Window running on headless display
+DisplayTemplate=Headless
+
+[Headless]
+display=:32

@@ -1,0 +1,9 @@
+[Session Entry]
+Name=Remote Chooser
+Type=Remote
+Description=Connect to chooser on nearby remote machine
+DisplayTemplate=RemoteMachine
+
+[RemoteMachine]
+display=:96
+vt=vt10

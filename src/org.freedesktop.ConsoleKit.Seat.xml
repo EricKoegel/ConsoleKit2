@@ -100,6 +100,24 @@ seat at a time.</doc:para>
       </doc:doc>
     </method>
 
+    <method name="Manage">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Attempt to create unmanaged sessions for this seat.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
+    <method name="Unmanage">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Stop managing seat.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
+
     <signal name="ActiveSessionChanged">
       <arg name="ssid" type="o">
         <doc:doc>
@@ -157,6 +175,74 @@ seat at a time.</doc:para>
       <doc:doc>
         <doc:description>
           <doc:para>Emitted when a device has been dissociated from the seat.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="OpenSessionRequest">
+      <arg name="ssid" type="o">
+        <doc:doc>
+          <doc:summary>The session id of the session to add</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="session_type" type="s">
+        <doc:doc>
+          <doc:summary>The type of session to run (e.g. "LoginWindow", "Chooser", etc)</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="display_template_name" type="s">
+        <doc:doc>
+          <doc:summary>The name of display template </doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="parameters" type="a{ss}">
+        <doc:doc>
+          <doc:summary>Session type specific parameters</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="display_type" type="s">
+        <doc:doc>
+          <doc:summary>The type of display to use (e.g. "X11", "Command", "XDMCP", etc)</doc:summary>
+        </doc:doc>
+      </arg>
+      <arg name="display_parameters" type="a{ss}">
+        <doc:doc>
+          <doc:summary>Display type specific parameters</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when a new session should get added to the seat.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="CloseSessionRequest">
+      <arg name="ssid" type="o">
+        <doc:doc>
+          <doc:summary>The session id of the session to remove</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when a session with given display number need to be removed.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="NoRespawn">
+      <arg name="ssid" type="o">
+        <doc:doc>
+          <doc:summary>The session id of the session to not respawn</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when ck-seat-tool indicates a session is to be removed.</doc:para>
+        </doc:description>
+      </doc:doc>
+    </signal>
+    <signal name="RemoveRequest">
+      <doc:doc>
+        <doc:description>
+          <doc:para>Emitted when seat needs to get removed.</doc:para>
         </doc:description>
       </doc:doc>
     </signal>

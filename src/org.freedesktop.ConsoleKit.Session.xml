@@ -52,6 +52,19 @@
         <doc:seealso><doc:ref type="property" to="Session:session-type">session-type</doc:ref></doc:seealso>
       </doc:doc>
     </method>
+    <method name="GetDisplayType">
+      <arg name="type" direction="out" type="s">
+        <doc:doc>
+          <doc:summary>Display type</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>Returns the display type of the session.</doc:para>
+        </doc:description>
+        <doc:seealso><doc:ref type="property" to="Session:display-type">display-type</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
     <method name="GetUser">
       <arg name="uid" direction="out" type="u">
         <doc:doc>
@@ -174,6 +187,18 @@
         <doc:seealso><doc:ref type="property" to="Session:is-local">is-local</doc:ref></doc:seealso>
       </doc:doc>
     </method>
+    <method name="IsOpen">
+      <arg name="open" direction="out" type="b">
+        <doc:doc>
+          <doc:summary>TRUE if the session is open, otherwise FALSE</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description><doc:para>Returns whether the session is open</doc:para>
+        </doc:description>
+        <doc:seealso><doc:ref type="property" to="Session:is-open">is-open</doc:ref></doc:seealso>
+      </doc:doc>
+    </method>
     <method name="GetCreationTime">
       <arg name="iso8601_datetime" type="s" direction="out">
         <doc:doc>
@@ -275,6 +300,21 @@
         </doc:description>
       </doc:doc>
     </method>
+    <method name="SetRemoveOnClose">
+      <annotation name="org.freedesktop.DBus.GLib.Async" value=""/>
+      <arg name="remove_on_close" type="b" direction="in">
+        <doc:doc>
+          <doc:summary>boolean value to set the remove-on-close to</doc:summary>
+        </doc:doc>
+      </arg>
+      <doc:doc>
+        <doc:description>
+          <doc:para>This may be used by the session to indicate that
+          it should be respawn or not when it is closed.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </method>
 
     <signal name="ActiveChanged">
       <arg name="is_active" type="b">
@@ -317,6 +357,19 @@
       </doc:doc>
     </signal>
 
+    <property name="session" type="o" access="readwrite">
+      <doc:doc>
+        <doc:description>
+          <doc:para>The id of the session.</doc:para>
+          <doc:para>
+          The object path of the session.  Typically this is set by a session leader during a call to the
+          <doc:ref type="method" to="Manager.OpenSessionWithParameters">OpenSessionWithParameters</doc:ref> method, when
+          opening a session in response to the <doc:ref type="signal" to="Seat::OpenSessionRequest">OpenSessionRequest</doc:ref>
+          signal.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </property>
     <property name="unix-user" type="u" access="readwrite">
       <doc:doc>
         <doc:description>
@@ -338,6 +391,16 @@
           <doc:para>The type of the session.</doc:para>
           <doc:para>Warning: we haven't yet defined the allowed values for this property.
           It is probably best to avoid this until we do.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </property>
+    <property name="display-type" type="s" access="readwrite">
+      <doc:doc>
+        <doc:description>
+          <doc:para>The display type of the session.</doc:para>
+          <doc:para>Indicate the display template name. All the display template configuration
+          files are under /etc/ConsoleKit/displays.d/.
           </doc:para>
         </doc:description>
       </doc:doc>
@@ -396,6 +459,19 @@
         </doc:description>
       </doc:doc>
     </property>
+    <property name="is-open" type="b" access="readwrite">
+      <doc:doc>
+        <doc:description>
+          <doc:para>
+          Whether the session is open</doc:para>
+          <doc:para>Sessions added from static configuration or in direct response to a call to
+          the <doc:ref type="method" to="Manager.AddSession">AddSession</doc:ref> method are initialally
+          closed and aren't open until a call to the <doc:ref type="method" to="Manager.OpenSessionWithParameters">OpenSessionWithParameters</doc:ref>
+          method.
+          </doc:para>
+        </doc:description>
+      </doc:doc>
+    </property>
     <property name="is-local" type="b" access="readwrite">
       <doc:doc>
         <doc:description>
@@ -405,6 +481,14 @@
           It was originally used as a way to identify XDMCP sessions that originate
           from a remote system.
           </doc:para>
+        </doc:description>
+      </doc:doc>
+    </property>
+    <property name="is-dynamic" type="b" access="readwrite">
+      <doc:doc>
+        <doc:description>
+          <doc:para>
+          Whether the session is dynamic</doc:para>
         </doc:description>
       </doc:doc>
     </property>
@@ -427,6 +511,14 @@
           <doc:para>
           This should not be considered authoritative.
           </doc:para>
+        </doc:description>
+      </doc:doc>
+    </property>
+    <property name="remove-on-close" type="b" access="readwrite">
+      <doc:doc>
+        <doc:description>
+          <doc:para>
+          Whether the session respawn when it is closed</doc:para>
         </doc:description>
       </doc:doc>
     </property>

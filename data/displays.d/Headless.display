@@ -1,0 +1,5 @@
+[Display]
+Type=X11
+
+[X11]
+Exec=/usr/bin/Xvfb $display -auth $auth

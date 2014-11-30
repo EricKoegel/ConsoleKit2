@@ -80,6 +80,7 @@ typedef struct
 {
         char *seat_id;
         int   seat_kind;
+        char *seat_type;
 } CkLogSeatAddedEvent;
 
 typedef struct
@@ -93,11 +94,13 @@ typedef struct
         char    *seat_id;
         char    *session_id;
         char    *session_type;
+        char    *display_type;
         char    *session_x11_display;
         char    *session_x11_display_device;
         char    *session_display_device;
         char    *session_remote_host_name;
         gboolean session_is_local;
+        gboolean session_is_dynamic;
         guint    session_unix_user;
         char    *session_creation_time;
 } CkLogSeatSessionAddedEvent;
@@ -107,11 +110,13 @@ typedef struct
         char    *seat_id;
         char    *session_id;
         char    *session_type;
+        char    *display_type;
         char    *session_x11_display;
         char    *session_x11_display_device;
         char    *session_display_device;
         char    *session_remote_host_name;
         gboolean session_is_local;
+        gboolean session_is_dynamic;
         guint    session_unix_user;
         char    *session_creation_time;
 } CkLogSeatSessionRemovedEvent;

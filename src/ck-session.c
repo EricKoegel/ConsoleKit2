@@ -40,6 +40,7 @@
 #include "ck-session-glue.h"
 #include "ck-marshal.h"
 #include "ck-run-programs.h"
+#include "ck-display-template.h"
 
 #define CK_SESSION_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), CK_TYPE_SESSION, CkSessionPrivate))
 
@@ -57,6 +58,7 @@ struct CkSessionPrivate
         char            *seat_id;
 
         char            *session_type;
+        char            *display_type;
         char            *login_session_id;
         char            *display_device;
         char            *x11_display_device;
@@ -64,8 +66,15 @@ struct CkSessionPrivate
         char            *remote_host_name;
         guint            uid;
 
+        CkDisplayTemplate *display_template;
+        GHashTable      *display_variables;
+
         gboolean         active;
         gboolean         is_local;
+        gboolean         is_open;
+        gboolean         ever_open;
+        gboolean         under_request;
+        GMutex          *mutex_under_request;
 
         GTimeVal         creation_time;
 
@@ -73,6 +82,8 @@ struct CkSessionPrivate
 
         gboolean         idle_hint;
         GTimeVal         idle_since_hint;
+
+        gboolean         remove_on_close;
 
         DBusGConnection *connection;
         DBusGProxy      *bus_proxy;
@@ -91,17 +102,24 @@ enum {
         PROP_0,
         PROP_ID,
         PROP_COOKIE,
+        PROP_SEAT_ID,
         PROP_USER,
         PROP_UNIX_USER,
         PROP_X11_DISPLAY,
         PROP_X11_DISPLAY_DEVICE,
         PROP_DISPLAY_DEVICE,
         PROP_SESSION_TYPE,
+        PROP_DISPLAY_TYPE,
+        PROP_DISPLAY_TEMPLATE,
+        PROP_DISPLAY_VARIABLES,
         PROP_REMOTE_HOST_NAME,
         PROP_LOGIN_SESSION_ID,
         PROP_IS_LOCAL,
+        PROP_IS_OPEN,
+        PROP_EVER_OPEN,
         PROP_ACTIVE,
         PROP_IDLE_HINT,
+        PROP_REMOVE_ON_CLOSE,
 };
 
 static guint signals [LAST_SIGNAL] = { 0, };
@@ -127,7 +145,9 @@ static gboolean
 register_session (CkSession *session)
 {
         GError *error = NULL;
+        GObject *existing_session;
 
+        g_debug ("CkSession: Register session.");
         error = NULL;
         session->priv->connection = dbus_g_bus_get (DBUS_BUS_SYSTEM, &error);
         if (session->priv->connection == NULL) {
@@ -142,6 +162,15 @@ register_session (CkSession *session)
                                                               DBUS_SERVICE_DBUS,
                                                               DBUS_PATH_DBUS,
                                                               DBUS_INTERFACE_DBUS);
+
+        existing_session = dbus_g_connection_lookup_g_object (session->priv->connection,
+                                                              session->priv->id);
+
+        if (existing_session != NULL) {
+                g_warning ("Session '%s' was registered twice!",
+                           session->priv->id);
+                return FALSE;
+        }
 
         dbus_g_connection_register_g_object (session->priv->connection, session->priv->id, G_OBJECT (session));
 
@@ -301,6 +330,40 @@ ck_session_set_idle_hint (CkSession             *session,
 }
 
 gboolean
+session_set_remove_on_close (CkSession      *session,
+                             gboolean        remove_on_close,
+                             GError        **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (session->priv->remove_on_close != remove_on_close) {
+                session->priv->remove_on_close = remove_on_close;
+        }
+
+        if (session->priv->remove_on_close == TRUE)
+                g_debug ("CkSession: Setting remove on close to true.");
+        else
+                g_debug ("CkSession: Setting remove on close to false.");
+
+        return TRUE;
+}
+
+/*
+  Example:
+  dbus-send --system --dest=org.freedesktop.ConsoleKit \
+  --type=method_call --print-reply --reply-timeout=2000 \
+  /org/freedesktop/ConsoleKit/Session1 \
+  org.freedesktop.ConsoleKit.Session.SetRemoveOnClose boolean:TRUE
+*/
+gboolean
+ck_session_set_remove_on_close (CkSession             *session,
+                                gboolean               remove_on_close,
+                                DBusGMethodInvocation *context)
+{
+        return session_set_remove_on_close (session, remove_on_close, NULL);
+}
+
+gboolean
 ck_session_get_idle_hint (CkSession *session,
                           gboolean  *idle_hint,
                           GError   **error)
@@ -366,6 +429,7 @@ ck_session_activate (CkSession             *session,
 {
         gboolean res;
 
+        g_debug ("CkSession: Session activate.");
         g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
 
         res = FALSE;
@@ -396,6 +460,8 @@ ck_session_set_active (CkSession      *session,
 {
         g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
 
+        g_debug ("CkSession: Session set active.");
+
         if (session->priv->active != active) {
                 session->priv->active = active;
                 g_signal_emit (session, signals [ACTIVE_CHANGED], 0, active);
@@ -414,6 +480,68 @@ ck_session_set_is_local (CkSession      *session,
         if (session->priv->is_local != is_local) {
                 session->priv->is_local = is_local;
         }
+
+        return TRUE;
+}
+
+gboolean
+ck_session_set_is_open (CkSession    *session,
+                        gboolean      is_open,
+                        GError      **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (session->priv->is_open != is_open) {
+                session->priv->is_open = is_open;
+                session->priv->ever_open = TRUE;
+        }
+
+        return TRUE;
+}
+
+gboolean
+ck_session_set_ever_open (CkSession    *session,
+                          gboolean      ever_open,
+                          GError      **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (session->priv->ever_open != ever_open) {
+                session->priv->ever_open = ever_open;
+        }
+
+        return TRUE;
+}
+
+static gboolean
+timeout_for_under_request (gpointer data)
+{
+        CkSession *session = CK_SESSION (data);
+        g_mutex_lock (session->priv->mutex_under_request);
+        session->priv->under_request = FALSE;
+        g_mutex_unlock (session->priv->mutex_under_request);
+
+        g_debug ("CkSession: timeout for under request of session %s", session->priv->id);
+        return FALSE;
+}
+
+gboolean
+ck_session_set_under_request (CkSession    *session,
+                              gboolean      under_request,
+                              GError      **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        g_mutex_lock (session->priv->mutex_under_request);
+        if (!under_request) {
+                session->priv->under_request = FALSE;
+        } else {
+                if (!session->priv->under_request) {
+                        session->priv->under_request = TRUE;
+                        g_timeout_add_seconds (1, timeout_for_under_request, session);
+                }
+        }
+        g_mutex_unlock (session->priv->mutex_under_request);
 
         return TRUE;
 }
@@ -554,6 +682,20 @@ ck_session_get_creation_time (CkSession      *session,
 }
 
 gboolean
+ck_session_get_remove_on_close (CkSession   *session,
+                                gboolean    *remove_on_close,
+                                GError     **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (remove_on_close != NULL) {
+                *remove_on_close = session->priv->remove_on_close;
+        }
+
+        return TRUE;
+}
+
+gboolean
 ck_session_get_session_type (CkSession      *session,
                              char          **type,
                              GError        **error)
@@ -562,6 +704,20 @@ ck_session_get_session_type (CkSession      *session,
 
         if (type != NULL) {
                 *type = g_strdup (session->priv->session_type);
+        }
+
+        return TRUE;
+}
+
+gboolean
+ck_session_get_display_type (CkSession      *session,
+                             char          **type,
+                             GError        **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (type != NULL) {
+                *type = g_strdup (session->priv->display_type);
         }
 
         return TRUE;
@@ -596,6 +752,50 @@ ck_session_is_local (CkSession      *session,
 }
 
 gboolean
+ck_session_is_open (CkSession      *session,
+                    gboolean       *open,
+                    GError        **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (open != NULL) {
+                *open = session->priv->is_open;
+        }
+
+        return TRUE;
+}
+
+gboolean
+ck_session_get_ever_open (CkSession      *session,
+                          gboolean       *open,
+                          GError        **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (open != NULL) {
+                *open = session->priv->ever_open;
+        }
+
+        return TRUE;
+}
+
+gboolean
+ck_session_get_under_request (CkSession      *session,
+                              gboolean       *under_request,
+                              GError        **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (under_request != NULL) {
+                g_mutex_lock (session->priv->mutex_under_request);
+                *under_request = session->priv->under_request;
+                g_mutex_unlock (session->priv->mutex_under_request);
+        }
+
+        return TRUE;
+}
+
+gboolean
 ck_session_set_id (CkSession      *session,
                    const char     *id,
                    GError        **error)
@@ -606,6 +806,21 @@ ck_session_set_id (CkSession      *session,
         session->priv->id = g_strdup (id);
 
         return TRUE;
+}
+
+static void
+ck_session_set_display_variables (CkSession  *session,
+                                  GHashTable *display_variables)
+{
+        if (session->priv->display_variables != NULL) {
+                g_hash_table_unref (session->priv->display_variables);
+        }
+
+        if (display_variables != NULL) {
+                session->priv->display_variables = g_hash_table_ref (display_variables);
+        } else {
+                session->priv->display_variables = NULL;
+        }
 }
 
 gboolean
@@ -724,6 +939,54 @@ ck_session_set_session_type (CkSession      *session,
         return TRUE;
 }
 
+gboolean
+ck_session_set_display_type (CkSession      *session,
+                             const char     *type,
+                             GError        **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        g_free (session->priv->display_type);
+        session->priv->display_type = g_strdup (type);
+
+        return TRUE;
+}
+
+static gboolean
+ck_session_set_display_template (CkSession      *session,
+                             CkDisplayTemplate  *display_template,
+                             GError        **error)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        if (session->priv->display_template != NULL) {
+                g_object_unref (session->priv->display_template);
+        }
+
+        if (display_template != NULL) {
+                session->priv->display_template = g_object_ref (display_template);
+                ck_session_set_display_type (session, ck_display_template_get_name (display_template), error);
+        } else {
+                session->priv->display_template = NULL;
+        }
+
+        return TRUE;
+}
+
+GHashTable *
+ck_session_get_display_variables (CkSession *session)
+{
+        return g_hash_table_ref (session->priv->display_variables);
+}
+
+CkDisplayTemplate *
+ck_session_get_display_template (CkSession      *session)
+{
+        g_return_val_if_fail (CK_IS_SESSION (session), FALSE);
+
+        return g_object_ref (session->priv->display_template);
+}
+
 static void
 ck_session_set_property (GObject            *object,
                          guint               prop_id,
@@ -741,14 +1004,32 @@ ck_session_set_property (GObject            *object,
         case PROP_IS_LOCAL:
                 ck_session_set_is_local (self, g_value_get_boolean (value), NULL);
                 break;
+        case PROP_IS_OPEN:
+                ck_session_set_is_open (self, g_value_get_boolean (value), NULL);
+                break;
+        case PROP_EVER_OPEN:
+                ck_session_set_ever_open (self, g_value_get_boolean (value), NULL);
+                break;
         case PROP_ID:
                 ck_session_set_id (self, g_value_get_string (value), NULL);
                 break;
         case PROP_COOKIE:
                 ck_session_set_cookie (self, g_value_get_string (value), NULL);
                 break;
+        case PROP_SEAT_ID:
+                ck_session_set_seat_id (self, g_value_get_string (value), NULL);
+                break;
         case PROP_SESSION_TYPE:
                 ck_session_set_session_type (self, g_value_get_string (value), NULL);
+                break;
+        case PROP_DISPLAY_TYPE:
+                ck_session_set_display_type (self, g_value_get_string (value), NULL);
+                break;
+        case PROP_DISPLAY_TEMPLATE:
+                ck_session_set_display_template (self, g_value_get_object (value), NULL);
+                break;
+        case PROP_DISPLAY_VARIABLES:
+                ck_session_set_display_variables (self, g_value_get_boxed (value));
                 break;
         case PROP_X11_DISPLAY:
                 ck_session_set_x11_display (self, g_value_get_string (value), NULL);
@@ -774,6 +1055,9 @@ ck_session_set_property (GObject            *object,
         case PROP_IDLE_HINT:
                 session_set_idle_hint_internal (self, g_value_get_boolean (value));
                 break;
+        case PROP_REMOVE_ON_CLOSE:
+                session_set_remove_on_close (self, g_value_get_boolean (value), NULL);
+                break;
         default:
                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
                 break;
@@ -797,14 +1081,32 @@ ck_session_get_property (GObject    *object,
         case PROP_IS_LOCAL:
                 g_value_set_boolean (value, self->priv->is_local);
                 break;
+        case PROP_IS_OPEN:
+                g_value_set_boolean (value, self->priv->is_open);
+                break;
+        case PROP_EVER_OPEN:
+                g_value_set_boolean (value, self->priv->ever_open);
+                break;
         case PROP_ID:
                 g_value_set_string (value, self->priv->id);
                 break;
         case PROP_COOKIE:
                 g_value_set_string (value, self->priv->cookie);
                 break;
+        case PROP_SEAT_ID:
+                g_value_set_string (value, self->priv->seat_id);
+                break;
         case PROP_SESSION_TYPE:
                 g_value_set_string (value, self->priv->session_type);
+                break;
+        case PROP_DISPLAY_TYPE:
+                g_value_set_string (value, self->priv->display_type);
+                break;
+        case PROP_DISPLAY_TEMPLATE:
+                g_value_set_object (value, self->priv->display_template);
+                break;
+        case PROP_DISPLAY_VARIABLES:
+                g_value_set_boxed (value, self->priv->display_variables);
                 break;
         case PROP_X11_DISPLAY:
                 g_value_set_string (value, self->priv->x11_display);
@@ -829,6 +1131,9 @@ ck_session_get_property (GObject    *object,
                 break;
         case PROP_IDLE_HINT:
                 g_value_set_boolean (value, self->priv->idle_hint);
+                break;
+        case PROP_REMOVE_ON_CLOSE:
+                g_value_set_boolean (value, self->priv->remove_on_close);
                 break;
         default:
                 G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
@@ -881,6 +1186,8 @@ session_add_activity_watch (CkSession *session)
 static void
 session_remove_activity_watch (CkSession *session)
 {
+        g_debug ("CkSession: Remove activity watch.");
+
         if (session->priv->idle_monitor == NULL) {
                 return;
         }
@@ -996,6 +1303,13 @@ ck_session_class_init (CkSessionClass *klass)
                                                               "cookie",
                                                               NULL,
                                                               G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
+        g_object_class_install_property (object_class,
+                                         PROP_SEAT_ID,
+                                         g_param_spec_string ("seat-id",
+                                                              "seat id",
+                                                              "seat id",
+                                                              NULL,
+                                                              G_PARAM_READWRITE | G_PARAM_CONSTRUCT_ONLY));
 
         g_object_class_install_property (object_class,
                                          PROP_SESSION_TYPE,
@@ -1004,6 +1318,27 @@ ck_session_class_init (CkSessionClass *klass)
                                                               "session type",
                                                               NULL,
                                                               G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+        g_object_class_install_property (object_class,
+                                         PROP_DISPLAY_TYPE,
+                                         g_param_spec_string ("display-type",
+                                                              "session-type",
+                                                              "session type",
+                                                              NULL,
+                                                              G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+        g_object_class_install_property (object_class,
+                                         PROP_DISPLAY_TEMPLATE,
+                                         g_param_spec_object ("display-template",
+                                                              "Display Template",
+                                                              "The display template",
+                                                              CK_TYPE_DISPLAY_TEMPLATE,
+                                                              G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
+        g_object_class_install_property (object_class,
+                                         PROP_DISPLAY_VARIABLES,
+                                         g_param_spec_boxed ("display-variables",
+                                                             "Display Variables",
+                                                             "Display type specific variables",
+                                                             G_TYPE_HASH_TABLE,
+                                                             G_PARAM_READWRITE | G_PARAM_CONSTRUCT));
         g_object_class_install_property (object_class,
                                          PROP_LOGIN_SESSION_ID,
                                          g_param_spec_string ("login-session-id",
@@ -1067,6 +1402,14 @@ ck_session_class_init (CkSessionClass *klass)
                                                                FALSE,
                                                                G_PARAM_READWRITE));
 
+        g_object_class_install_property (object_class,
+                                         PROP_REMOVE_ON_CLOSE,
+                                         g_param_spec_boolean ("remove-on-close",
+                                                               NULL,
+                                                               NULL,
+                                                               FALSE,
+                                                               G_PARAM_READWRITE));
+
         g_type_class_add_private (klass, sizeof (CkSessionPrivate));
 
         dbus_g_object_type_install_info (CK_TYPE_SESSION, &dbus_glib_ck_session_object_info);
@@ -1077,8 +1420,16 @@ ck_session_init (CkSession *session)
 {
         session->priv = CK_SESSION_GET_PRIVATE (session);
 
+        session->priv->display_variables = g_hash_table_new_full (g_str_hash,
+                                                                  g_str_equal,
+                                                                  (GDestroyNotify) g_free,
+                                                                  (GDestroyNotify) g_free);
+
         /* FIXME: should we have a property for this? */
         g_get_current_time (&session->priv->creation_time);
+
+        if (!session->priv->mutex_under_request)
+                session->priv->mutex_under_request = g_mutex_new ();
 }
 
 static void
@@ -1101,6 +1452,7 @@ ck_session_finalize (GObject *object)
         g_free (session->priv->cookie);
         g_free (session->priv->seat_id);
         g_free (session->priv->session_type);
+        g_free (session->priv->display_type);
         g_free (session->priv->login_session_id);
         g_free (session->priv->display_device);
         g_free (session->priv->x11_display_device);
@@ -1111,16 +1463,138 @@ ck_session_finalize (GObject *object)
 }
 
 CkSession *
-ck_session_new (const char *ssid,
-                const char *cookie)
+ck_session_new_from_file (const char *ssid,
+                          const char *path)
 {
+        GKeyFile  *key_file;
+        gboolean   res;
+        GError    *error;
+        char      *group;
+        char      *name;
+        gboolean   hidden;
+        char      *type;
+        char      *display_template_string;
+        CkSession *session;
+        GHashTable *display_variables;
+        char     **type_keys;
+
+        g_debug ("CkSession: New session from file.");
+        key_file = g_key_file_new ();
+        error = NULL;
+        res = g_key_file_load_from_file (key_file,
+                                         path,
+                                         G_KEY_FILE_NONE,
+                                         &error);
+
+        if (! res) {
+                g_warning ("Unable to load sessions from file %s: %s",
+                           path, error->message);
+                g_error_free (error);
+                return NULL;
+        }
+
+        group = g_key_file_get_start_group (key_file);
+        if (group == NULL || strcmp (group, "Session Entry") != 0) {
+                g_warning ("Not a session file: %s", path);
+                g_key_file_free (key_file);
+                return NULL;
+        }
+
+        hidden = g_key_file_get_boolean (key_file, group, "Hidden", NULL);
+
+        if (hidden) {
+                g_debug ("CkSession: Session is hidden");
+                g_free (group);
+                g_key_file_free (key_file);
+                return NULL;
+        }
+
+        name = g_key_file_get_string (key_file, group, "Name", NULL);
+
+        if (name == NULL) {
+                g_warning ("Session file %s doesn't contain a name", path);
+                g_free (group);
+                g_key_file_free (key_file);
+                return NULL;
+        }
+
+        type = g_key_file_get_string (key_file, group, "Type", NULL);
+
+        if (type == NULL) {
+                g_warning ("Session file %s doesn't contain a type", path);
+                g_free (group);
+                g_key_file_free (key_file);
+                return NULL;
+        }
+
+        display_template_string = g_key_file_get_string (key_file, group, "DisplayTemplate", NULL);
+
+        if (display_template_string == NULL) {
+                g_warning ("Session file %s doesn't contain a display type", path);
+                g_free (group);
+                g_key_file_free (key_file);
+                return NULL;
+        }
+
+        /* Find a group in the key file named after the display type and stuff
+         * all its entries into a hash table for later.
+         *
+         * Those keys are for things like the display number and the vt to
+         * run X with.
+         */
+        display_variables = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                   (GDestroyNotify) g_free,
+                                                   (GDestroyNotify) g_free);
+        type_keys = g_key_file_get_keys (key_file, display_template_string, NULL, NULL);
+
+        if (type_keys != NULL) {
+                int i;
+                for (i = 0; type_keys[i] != NULL; i++) {
+                        char    *string;
+                        string = g_key_file_get_string (key_file, display_template_string, type_keys[i], NULL);
+
+                        g_hash_table_insert (display_variables, g_strdup (type_keys[i]), string);
+                }
+                g_strfreev (type_keys);
+        }
+
+        session = ck_session_new (ssid, type, display_template_string, display_variables);
+
+        g_free (display_template_string);
+        g_free (group);
+        g_free (type);
+        g_hash_table_unref (display_variables);
+
+        return session;
+}
+
+CkSession *
+ck_session_new (const char *ssid,
+                const char *type,
+                const char *display_template_string,
+                GHashTable *display_variables)
+{
+        CkDisplayTemplate *display_template;
         GObject *object;
         gboolean res;
 
+        g_debug ("CkSession: New Session.");
+
+        display_template = ck_display_template_get_from_name (display_template_string);
+
+        if (display_template == NULL) {
+                g_warning ("Unable to load display type %s", display_template_string);
+                return NULL;
+        }
+
         object = g_object_new (CK_TYPE_SESSION,
                                "id", ssid,
-                               "cookie", cookie,
+                               "session-type", type,
+                               "display-type", display_template_string,
+                               "display-template", display_template,
+                               "display-variables", display_variables,
                                NULL);
+
         res = register_session (CK_SESSION (object));
         if (! res) {
                 g_object_unref (object);
@@ -1135,9 +1609,80 @@ ck_session_new (const char *ssid,
                                                           G_TYPE_VALUE, \
                                                           G_TYPE_INVALID))
 
+void
+ck_session_set_parameters (CkSession       *session,
+                           const GPtrArray *parameters)
+{
+        int           i;
+        GObjectClass *class;
+        GType         object_type;
+
+        object_type = CK_TYPE_SESSION;
+        class = g_type_class_ref (object_type);
+        for (i = 0; i < parameters->len; i++) {
+                gboolean    res;
+                GValue      val_struct = { 0, };
+                GValue      value = { 0, };
+                char       *prop_name;
+                GValue     *prop_val;
+                GParamSpec *pspec;
+
+                g_value_init (&val_struct, CK_TYPE_PARAMETER_STRUCT);
+                g_value_set_static_boxed (&val_struct, g_ptr_array_index (parameters, i));
+
+                res = dbus_g_type_struct_get (&val_struct,
+                                              0, &prop_name,
+                                              1, &prop_val,
+                                              G_MAXUINT);
+                if (! res) {
+                        g_debug ("CkSession: Unable to extract parameter input");
+                        goto cont;
+                }
+
+                if (prop_name == NULL) {
+                        g_debug ("CkSession: Skipping NULL parameter");
+                        goto cont;
+                }
+
+                if (strcmp (prop_name, "id") == 0
+                    || strcmp (prop_name, "cookie") == 0) {
+                        g_debug ("CkSession: Skipping restricted parameter: %s", prop_name);
+                        goto cont;
+                }
+
+                pspec = g_object_class_find_property (class, prop_name);
+                if (! pspec) {
+                        g_debug ("CkSession: Skipping unknown parameter: %s", prop_name);
+                        goto cont;
+                }
+
+                if (!(pspec->flags & G_PARAM_WRITABLE)) {
+                        g_debug ("CkSession: property '%s' is not writable", pspec->name);
+                        goto cont;
+                }
+
+                g_value_init (&value, G_PARAM_SPEC_VALUE_TYPE (pspec));
+                res = g_value_transform (prop_val, &value);
+                if (! res) {
+                        g_debug ("CkSession: unable to transform property value for '%s'", pspec->name);
+                        goto cont;
+                }
+
+                g_object_set_property (G_OBJECT (session), prop_name, &value);
+                g_value_unset (&value);
+        cont:
+                g_free (prop_name);
+                if (prop_val != NULL) {
+                        g_value_unset (prop_val);
+                        g_free (prop_val);
+                }
+        }
+
+        g_type_class_unref (class);
+}
+
 CkSession *
 ck_session_new_with_parameters (const char      *ssid,
-                                const char      *cookie,
                                 const GPtrArray *parameters)
 {
         GObject      *object;
@@ -1148,6 +1693,8 @@ ck_session_new_with_parameters (const char      *ssid,
         guint         n_params;
         GObjectClass *class;
         GType         object_type;
+
+        g_debug ("CkSession: New session with parameters");
 
         object_type = CK_TYPE_SESSION;
         class = g_type_class_ref (object_type);
@@ -1164,12 +1711,6 @@ ck_session_new_with_parameters (const char      *ssid,
         params[n_params].value.g_type = 0;
         g_value_init (&params[n_params].value, G_TYPE_STRING);
         g_value_set_string (&params[n_params].value, ssid);
-        n_params++;
-
-        params[n_params].name = g_strdup ("cookie");
-        params[n_params].value.g_type = 0;
-        g_value_init (&params[n_params].value, G_TYPE_STRING);
-        g_value_set_string (&params[n_params].value, cookie);
         n_params++;
 
         if (parameters != NULL) {
@@ -1256,13 +1797,16 @@ ck_session_run_programs (CkSession  *session,
                          const char *action)
 {
         int   n;
-        char *extra_env[11]; /* be sure to adjust this as needed */
+        char *extra_env[12]; /* be sure to adjust this as needed */
 
         n = 0;
 
         extra_env[n++] = g_strdup_printf ("CK_SESSION_ID=%s", session->priv->id);
         if (session->priv->session_type != NULL) {
                 extra_env[n++] = g_strdup_printf ("CK_SESSION_TYPE=%s", session->priv->session_type);
+        }
+        if (session->priv->display_type != NULL) {
+                extra_env[n++] = g_strdup_printf ("CK_SESSION_DISPLAY_TYPE=%s", session->priv->display_type);
         }
         extra_env[n++] = g_strdup_printf ("CK_SESSION_SEAT_ID=%s", session->priv->seat_id);
         extra_env[n++] = g_strdup_printf ("CK_SESSION_USER_UID=%d", session->priv->uid);
@@ -1298,6 +1842,10 @@ ck_session_dump (CkSession *session,
         char *s;
         char *group_name;
 
+        if (!session->priv->is_open) {
+                return;
+        }
+
         group_name = g_strdup_printf ("Session %s", session->priv->id);
         g_key_file_set_integer (key_file, group_name, "uid", session->priv->uid);
         g_key_file_set_string (key_file,
@@ -1309,6 +1857,12 @@ ck_session_dump (CkSession *session,
                                        group_name,
                                        "type",
                                        NONULL_STRING (session->priv->session_type));
+        }
+        if (session->priv->display_type != NULL) {
+                g_key_file_set_string (key_file,
+                                       group_name,
+                                       "display_type",
+                                       NONULL_STRING (session->priv->display_type));
         }
         if (session->priv->login_session_id != NULL && strlen (session->priv->login_session_id) > 0) {
                 g_key_file_set_string (key_file,

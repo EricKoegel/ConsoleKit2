@@ -1,0 +1,8 @@
+[Session Entry]
+Name=LocalVNC
+Type=LoginWindow
+Description=Connect to local VNC server running on same machine
+DisplayTemplate=LocalVNC
+
+[LocalVNC]
+display=:64

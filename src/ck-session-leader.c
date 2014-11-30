@@ -237,6 +237,7 @@ static struct {
         { "x11-display",        add_param_string },
         { "remote-host-name",   add_param_string },
         { "session-type",       add_param_string },
+        { "display-type",       add_param_string },
         { "is-local",           add_param_boolean },
         { "unix-user",          add_param_int },
 };

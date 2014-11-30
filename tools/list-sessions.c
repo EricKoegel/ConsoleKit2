@@ -45,6 +45,22 @@
 #define CK_SEAT_INTERFACE    "org.freedesktop.ConsoleKit.Seat"
 #define CK_SESSION_INTERFACE "org.freedesktop.ConsoleKit.Session"
 
+#define IS_STR_SET(x) (x != NULL && x[0] != '\0')
+
+typedef struct CkSessionOutput {
+        char    *prop_name;
+        char    *prop_value;
+} CkSessionOutput;
+
+static gboolean do_all = FALSE;
+static gboolean do_version = FALSE;
+static char *do_format = NULL;
+static GOptionEntry entries [] = {
+        { "all", 'a', 0, G_OPTION_ARG_NONE, &do_all, N_("List all sessions. If not given, only list open sessions"), NULL },
+        { "format", 'f', 0, G_OPTION_ARG_STRING, &do_format, N_("Prints information according to the given format"), NULL },
+        { NULL }
+};
+
 static gboolean
 get_uint (DBusGProxy *proxy,
           const char *method,
@@ -175,6 +191,7 @@ list_session (DBusGConnection *connection,
         char       *sid;
         char       *lsid;
         char       *session_type;
+        char       *display_type;
         char       *x11_display;
         char       *x11_display_device;
         char       *display_device;
@@ -183,8 +200,11 @@ list_session (DBusGConnection *connection,
         char       *idle_since_hint;
         gboolean    is_active;
         gboolean    is_local;
+        gboolean    is_open;
         char       *short_sid;
         const char *short_ssid;
+        char      **format_arr = NULL;
+        int         i, j;
 
         proxy = dbus_g_proxy_new_for_name (connection,
                                            CK_NAME,
@@ -197,6 +217,7 @@ list_session (DBusGConnection *connection,
         sid = NULL;
         lsid = NULL;
         session_type = NULL;
+        display_type = NULL;
         x11_display = NULL;
         x11_display_device = NULL;
         display_device = NULL;
@@ -208,14 +229,20 @@ list_session (DBusGConnection *connection,
         get_path (proxy, "GetSeatId", &sid);
         get_string (proxy, "GetLoginSessionId", &lsid);
         get_string (proxy, "GetSessionType", &session_type);
+        get_string (proxy, "GetDisplayType", &display_type);
         get_string (proxy, "GetX11Display", &x11_display);
         get_string (proxy, "GetX11DisplayDevice", &x11_display_device);
         get_string (proxy, "GetDisplayDevice", &display_device);
         get_string (proxy, "GetRemoteHostName", &remote_host_name);
+        get_boolean (proxy, "IsOpen", &is_open);
         get_boolean (proxy, "IsActive", &is_active);
         get_boolean (proxy, "IsLocal", &is_local);
         get_string (proxy, "GetCreationTime", &creation_time);
         get_string (proxy, "GetIdleSinceHint", &idle_since_hint);
+
+        if (!do_all && !is_open) {
+                return;
+        }
 
         realname = get_real_name (uid);
 
@@ -229,24 +256,49 @@ list_session (DBusGConnection *connection,
                 short_ssid = ssid + strlen (CK_PATH) + 1;
         }
 
-        printf ("%s:\n\tunix-user = '%d'\n\trealname = '%s'\n\tseat = '%s'\n\tsession-type = '%s'\n\tactive = %s\n\tx11-display = '%s'\n\tx11-display-device = '%s'\n\tdisplay-device = '%s'\n\tremote-host-name = '%s'\n\tis-local = %s\n\ton-since = '%s'\n\tlogin-session-id = '%s'",
-                short_ssid,
-                uid,
-                realname,
-                short_sid,
-                session_type,
-                is_active ? "TRUE" : "FALSE",
-                x11_display,
-                x11_display_device,
-                display_device,
-                remote_host_name,
-                is_local ? "TRUE" : "FALSE",
-                creation_time,
-                lsid);
-        if (idle_since_hint != NULL && idle_since_hint[0] != '\0') {
-                printf ("\n\tidle-since-hint = '%s'", idle_since_hint);
+        CkSessionOutput output[] = {
+                {"session-id", g_strdup (short_ssid)},
+                {"unix-user", g_strdup_printf ("%d", uid)},
+                {"realname", g_strdup (realname)},
+                {"seat", g_strdup (short_sid)},
+                {"session-type", g_strdup (session_type)},
+                {"display-type", g_strdup (display_type)},
+                {"open", is_open ? "TRUE" : "FALSE"},
+                {"active", is_active ? "TRUE" : "FALSE"},
+                {"x11-display", g_strdup (x11_display)},
+                {"x11-display-device", g_strdup (x11_display_device)},
+                {"display-device", g_strdup (display_device)},
+                {"remote-host-name", g_strdup (remote_host_name)},
+                {"is-local", is_local ? "TRUE" : "FALSE"},
+                {"on-since", g_strdup (creation_time)},
+                {"login-session-id", g_strdup (lsid)},
+                {"idle-since-hint", g_strdup (idle_since_hint)},
+        };
+
+        if (IS_STR_SET (do_format)) {
+                format_arr = g_strsplit (do_format, ",", -1);
+
+                for (i = 0; format_arr[i] != NULL; ++i) {
+                        for (j = 0; j < G_N_ELEMENTS (output); j++) {
+                                if (g_str_equal (format_arr[i], output[j].prop_name)) {
+                                        printf ("'%s'\t", output[j].prop_value);
+                                        break;
+                                }
+                        }
+                }
+                printf ("\n");
+                g_strfreev (format_arr);
+
+        } else {
+                for (j = 0; j < G_N_ELEMENTS (output); j++) {
+                        if (g_str_equal (output[j].prop_name, "session-id"))
+                                printf ("%s:\n", output[j].prop_value);
+                        else
+                                printf ("\t%s = '%s'\n",
+                                        output[j].prop_name,
+                                        output[j].prop_value);
+                }
         }
-        printf ("\n");
 
         g_free (idle_since_hint);
         g_free (creation_time);
@@ -255,9 +307,11 @@ list_session (DBusGConnection *connection,
         g_free (sid);
         g_free (lsid);
         g_free (session_type);
+        g_free (display_type);
         g_free (x11_display);
         g_free (x11_display_device);
         g_free (display_device);
+
         g_object_unref (proxy);
 }
 

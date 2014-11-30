@@ -62,6 +62,7 @@ sbin_PROGRAMS = \
 	ck-log-system-start		\
 	ck-log-system-restart		\
 	ck-log-system-stop		\
+	ck-seat-tool			\
 	$(NULL)
 
 ck_launch_session_SOURCES =		\
@@ -90,6 +91,14 @@ ck_history_LDADD =			\
 	$(HISTORY_LIBS)			\
 	$(Z_LIBS)			\
 	$(top_builddir)/src/libck-event-log.la	\
+	$(NULL)
+
+ck_seat_tool_SOURCES =			\
+	ck-seat-tool.c			\
+	$(NULL)
+
+ck_seat_tool_LDADD =			\
+	$(CONSOLE_KIT_LIBS)		\
 	$(NULL)
 
 ck_log_system_start_SOURCES =		\

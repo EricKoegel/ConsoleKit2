@@ -225,6 +225,18 @@ AM_CONDITIONAL(CK_COMPILE_GNU, test x$CK_BACKEND = xgnu, [Compiling for GNU])
 AC_SUBST(CK_BACKEND)
 
 dnl ---------------------------------------------------------------------------
+dnl Check for X11 DIR
+dnl ---------------------------------------------------------------------------
+
+X11_DIR=`$PKG_CONFIG --variable=bindir xorg-server 2>/dev/null`
+if test "x$X11_DIR" = x; then
+    AC_PATH_PROGS([XSERVER], [Xorg X],,[$PATH:/usr/X11/bin:/usr/bin])
+    test "x$XSERVER" != x && X11_DIR=`dirname "$XSERVER"`
+fi
+test "x$X11_DIR" = x && X11_DIR=$bindir
+AC_SUBST([X11_DIR])
+
+dnl ---------------------------------------------------------------------------
 dnl Check for PAM
 dnl ---------------------------------------------------------------------------
 
@@ -356,6 +368,14 @@ if test "x$enable_inotify" = "xyes" ; then
 fi
 
 dnl ---------------------------------------------------------------------------
+dnl check for strverscmp
+dnl ---------------------------------------------------------------------------
+have_strverscmp=no
+AC_CHECK_FUNCS(strverscmp, [have_strverscmp=yes], [])
+
+AM_CONDITIONAL(USE_SELF_STRVERSCMP, test "x$have_strverscmp" = "xno", [Define if we do not have strverscmp])
+
+dnl ---------------------------------------------------------------------------
 dnl check for RBAC
 dnl ---------------------------------------------------------------------------
 
@@ -478,6 +498,8 @@ tools/freebsd/Makefile
 tools/openbsd/Makefile
 tools/solaris/Makefile
 data/Makefile
+data/displays.d/Makefile
+data/sessions.d/Makefile
 doc/Makefile
 doc/dbus/ConsoleKit.xml
 doc/dbus/Makefile
